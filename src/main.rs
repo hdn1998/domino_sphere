@@ -111,7 +111,10 @@ async fn main() {
 
     // 新增：跟踪鼠标拖动状态
     let mut is_dragging = false;
-    let mut drag_start_pos = Vec2::ZERO;
+    let mut drag_start_pos = Vec2::new(0.0, 0.0);
+
+    // 记录是否是第一次生成小球
+    let mut first_ball_created = false;
 
     // 创建多米诺骨牌式排列的球
     const BALL_RADIUS: f32 = 20.0;
@@ -169,13 +172,37 @@ async fn main() {
             is_dragging = false;
             let drag_end_pos = Vec2::new(mouse_position().0, mouse_position().1);
 
+            let hue: f32;
+
+            if !first_ball_created {
+                // 第一次生成小球，使用随机颜色
+                hue = get_time() as f32 * 0.1 % 1.0;
+                first_ball_created = true;
+            } else {
+                // 找出碰撞次数最少的颜色
+                let min_count = *color_collision_counts.iter().min().unwrap_or(&0);
+
+                // 收集所有碰撞次数最小的颜色索引
+                let mut min_indices = Vec::new();
+                for (i, &count) in color_collision_counts.iter().enumerate() {
+                    if count == min_count {
+                        min_indices.push(i);
+                    }
+                }
+
+                // 从最小碰撞次数的颜色中随机选择一个
+                let random_index = min_indices[rand::gen_range(0, min_indices.len())];
+                hue = random_index as f32 / 10.0;
+            }
+
+            let color = hsl_to_rgb(hue, 0.8, 0.6);
+
             // 创建新球并根据拖动距离设置速度
-            let hue = get_time() as f32 * 0.1 % 1.0;
             let mut new_ball = Ball::new(
                 drag_start_pos.x,
                 drag_start_pos.y,
                 BALL_RADIUS,
-                hsl_to_rgb(hue, 0.8, 0.6),
+                color,
                 hue
             );
 
