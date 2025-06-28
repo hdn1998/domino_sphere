@@ -98,8 +98,11 @@ impl Ball {
 #[macroquad::main("Ball Domino Effect")]
 async fn main() {
     let mut balls = Vec::new();
-    // 定义碰撞次数变量
     let mut collision_count: u32 = 0;
+
+    // 新增：跟踪鼠标拖动状态
+    let mut is_dragging = false;
+    let mut drag_start_pos = Vec2::ZERO;
 
     // 创建多米诺骨牌式排列的球
     const BALL_RADIUS: f32 = 20.0;
@@ -119,7 +122,6 @@ async fn main() {
         }
     }
 
-    // 给第一个球一个初始速度，触发多米诺效应
     if let Some(first_ball) = balls.first_mut() {
         first_ball.velocity.x = 200.0;
     }
@@ -147,23 +149,26 @@ async fn main() {
             ball.draw();
         }
 
-        // 点击添加新球并赋予速度
+        // 改进的鼠标交互逻辑
         if is_mouse_button_pressed(MouseButton::Left) {
-            let mouse_pos = mouse_position();
+            is_dragging = true;
+            drag_start_pos = Vec2::new(mouse_position().0, mouse_position().1);
+        }
+
+        if is_dragging && is_mouse_button_released(MouseButton::Left) {
+            is_dragging = false;
+            let drag_end_pos = Vec2::new(mouse_position().0, mouse_position().1);
+
+            // 创建新球并根据拖动距离设置速度
             let mut new_ball = Ball::new(
-                mouse_pos.0,
-                mouse_pos.1,
+                drag_start_pos.x,
+                drag_start_pos.y,
                 BALL_RADIUS,
                 hsl_to_rgb(get_time() as f32 * 0.1 % 1.0, 0.8, 0.6)
             );
 
-            // 根据鼠标拖动方向赋予速度
-            if is_mouse_button_down(MouseButton::Left) {
-                let drag_start = mouse_position();
-                let drag_end = mouse_position();
-                new_ball.velocity.x = (drag_end.0 - drag_start.0) * 5.0;
-                new_ball.velocity.y = (drag_end.1 - drag_start.1) * 5.0;
-            }
+            // 计算速度向量（拖动方向和距离）
+            new_ball.velocity = (drag_end_pos - drag_start_pos) * 5.0;
 
             balls.push(new_ball);
         }
@@ -176,6 +181,16 @@ async fn main() {
             30.0,
             WHITE
         );
+
+        // 显示拖动预览线
+        if is_dragging {
+            let current_pos = Vec2::new(mouse_position().0, mouse_position().1);
+            draw_line(
+                drag_start_pos.x, drag_start_pos.y,
+                current_pos.x, current_pos.y,
+                2.0, YELLOW
+            );
+        }
 
         next_frame().await
     }
