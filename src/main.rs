@@ -5,15 +5,18 @@ struct Ball {
     velocity: Vec2,
     radius: f32,
     color: Color,
+    // 新增：记录球的颜色类别（HSV模型中的色调值，范围0.0-1.0）
+    hue: f32,
 }
 
 impl Ball {
-    fn new(x: f32, y: f32, radius: f32, color: Color) -> Self {
+    fn new(x: f32, y: f32, radius: f32, color: Color, hue: f32) -> Self {
         Ball {
             position: Vec2::new(x, y),
             velocity: Vec2::ZERO,
             radius,
             color,
+            hue,
         }
     }
 
@@ -50,14 +53,19 @@ impl Ball {
         );
     }
 
-    fn check_collision(&mut self, other: &mut Ball, collision_count: &mut u32) {
+    fn check_collision(&mut self, other: &mut Ball, color_collision_counts: &mut [u32; 10]) {
         let dx = other.position.x - self.position.x;
         let dy = other.position.y - self.position.y;
         let distance = (dx * dx + dy * dy).sqrt();
 
         if distance < self.radius + other.radius {
-            // 增加碰撞次数
-            *collision_count += 1;
+            // 计算两个球的颜色索引（将0-1的hue值映射到0-9的索引）
+            let self_color_index = (self.hue * 10.0) as usize;
+            let other_color_index = (other.hue * 10.0) as usize;
+
+            // 增加对应颜色的碰撞次数
+            color_collision_counts[self_color_index] += 1;
+            color_collision_counts[other_color_index] += 1;
 
             // 计算碰撞后的速度变化
             let nx = dx / distance;
@@ -98,7 +106,8 @@ impl Ball {
 #[macroquad::main("Ball Domino Effect")]
 async fn main() {
     let mut balls = Vec::new();
-    let mut collision_count: u32 = 0;
+    // 改为使用数组存储10种不同颜色的碰撞次数
+    let mut color_collision_counts = [0u32; 10];
 
     // 新增：跟踪鼠标拖动状态
     let mut is_dragging = false;
@@ -118,7 +127,8 @@ async fn main() {
             let hue = (row * COLS + col) as f32 / (ROWS * COLS) as f32;
             let color = hsl_to_rgb(hue, 0.8, 0.6);
 
-            balls.push(Ball::new(x, y, BALL_RADIUS, color));
+            // 保存每个球的hue值，用于后续颜色分类
+            balls.push(Ball::new(x, y, BALL_RADIUS, color, hue));
         }
     }
 
@@ -140,7 +150,7 @@ async fn main() {
         for i in 0..balls.len() {
             for j in (i+1)..balls.len() {
                 let (left, right) = balls.split_at_mut(j);
-                left[i].check_collision(&mut right[0], &mut collision_count);
+                left[i].check_collision(&mut right[0], &mut color_collision_counts);
             }
         }
 
@@ -149,7 +159,7 @@ async fn main() {
             ball.draw();
         }
 
-        // 改进的鼠标交互逻辑
+        // 鼠标交互逻辑
         if is_mouse_button_pressed(MouseButton::Left) {
             is_dragging = true;
             drag_start_pos = Vec2::new(mouse_position().0, mouse_position().1);
@@ -160,11 +170,13 @@ async fn main() {
             let drag_end_pos = Vec2::new(mouse_position().0, mouse_position().1);
 
             // 创建新球并根据拖动距离设置速度
+            let hue = get_time() as f32 * 0.1 % 1.0;
             let mut new_ball = Ball::new(
                 drag_start_pos.x,
                 drag_start_pos.y,
                 BALL_RADIUS,
-                hsl_to_rgb(get_time() as f32 * 0.1 % 1.0, 0.8, 0.6)
+                hsl_to_rgb(hue, 0.8, 0.6),
+                hue
             );
 
             // 计算速度向量（拖动方向和距离）
@@ -173,15 +185,6 @@ async fn main() {
             balls.push(new_ball);
         }
 
-        // 在屏幕上绘制碰撞次数
-        draw_text(
-            &format!("Collision Count: {}", collision_count),
-            10.0,
-            30.0,
-            30.0,
-            WHITE
-        );
-
         // 显示拖动预览线
         if is_dragging {
             let current_pos = Vec2::new(mouse_position().0, mouse_position().1);
@@ -189,6 +192,21 @@ async fn main() {
                 drag_start_pos.x, drag_start_pos.y,
                 current_pos.x, current_pos.y,
                 2.0, YELLOW
+            );
+        }
+
+        // 在屏幕上绘制各类颜色的碰撞次数
+        draw_text("Collision Counts by Color:", 10.0, 30.0, 24.0, WHITE);
+
+        // 将HSL颜色空间分为10个区间，每个区间显示对应的碰撞次数
+        for i in 0..10 {
+            let color = hsl_to_rgb(i as f32 / 10.0, 0.8, 0.6);
+            draw_text(
+                &format!("{:.1}: {}", i as f32 / 10.0, color_collision_counts[i]),
+                10.0 + (i % 5) as f32 * 150.0,
+                60.0 + (i / 5) as f32 * 30.0,
+                20.0,
+                color
             );
         }
 
@@ -217,4 +235,4 @@ fn hsl_to_rgb(h: f32, s: f32, l: f32) -> Color {
     };
 
     Color::new(r + m, g + m, b + m, 1.0)
-}
+}    
