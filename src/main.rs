@@ -50,12 +50,15 @@ impl Ball {
         );
     }
 
-    fn check_collision(&mut self, other: &mut Ball) {
+    fn check_collision(&mut self, other: &mut Ball, collision_count: &mut u32) {
         let dx = other.position.x - self.position.x;
         let dy = other.position.y - self.position.y;
         let distance = (dx * dx + dy * dy).sqrt();
 
         if distance < self.radius + other.radius {
+            // 增加碰撞次数
+            *collision_count += 1;
+
             // 计算碰撞后的速度变化
             let nx = dx / distance;
             let ny = dy / distance;
@@ -95,6 +98,8 @@ impl Ball {
 #[macroquad::main("Ball Domino Effect")]
 async fn main() {
     let mut balls = Vec::new();
+    // 定义碰撞次数变量
+    let mut collision_count: u32 = 0;
 
     // 创建多米诺骨牌式排列的球
     const BALL_RADIUS: f32 = 20.0;
@@ -133,7 +138,7 @@ async fn main() {
         for i in 0..balls.len() {
             for j in (i+1)..balls.len() {
                 let (left, right) = balls.split_at_mut(j);
-                left[i].check_collision(&mut right[0]);
+                left[i].check_collision(&mut right[0], &mut collision_count);
             }
         }
 
@@ -162,6 +167,15 @@ async fn main() {
 
             balls.push(new_ball);
         }
+
+        // 在屏幕上绘制碰撞次数
+        draw_text(
+            &format!("Collision Count: {}", collision_count),
+            10.0,
+            30.0,
+            30.0,
+            WHITE
+        );
 
         next_frame().await
     }
