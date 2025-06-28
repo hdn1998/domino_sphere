@@ -188,4 +188,4 @@ fn hsl_to_rgb(h: f32, s: f32, l: f32) -> Color {
     };
 
     Color::new(r + m, g + m, b + m, 1.0)
-}    
+}
