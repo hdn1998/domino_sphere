@@ -1,5 +1,4 @@
 use macroquad::prelude::*;
-
 struct Ball {
     position: Vec2,
     velocity: Vec2,
@@ -146,13 +145,18 @@ async fn main() {
     let mut drag_start_pos = Vec2::new(0.0, 0.0);
     let mut first_ball_created = false;
 
+    // 拖动时预览线的颜色
+    let mut drag_preview_color = YELLOW;
+    // 自动发射预览线的颜色
+    let mut auto_fire_preview_color = BLUE;
+
     // 自动发射相关变量
     let mut auto_fire_enabled = true; // 是否启用自动发射
     let mut auto_fire_timer = 0.0; // 自动发射计时器
     const AUTO_FIRE_INTERVAL: f32 = 2.0; // 自动发射间隔（秒）
     const AUTO_FIRE_SPEED_MULTIPLIER: f32 = 5.0; // 自动发射速度乘数
 
-    // 保存上一次发射的球的位置和ID
+    // 保存上一次发射的球的位置和 ID
     let mut last_launched_ball_id: Option<usize> = None;
     let mut last_launched_ball_position = Vec2::new(screen_width() / 2.0, screen_height() - 100.0);
 
@@ -227,6 +231,7 @@ async fn main() {
                     let random_index = min_indices[rand::gen_range(0, min_indices.len())];
                     let hue = random_index as f32 / 10.0;
                     let color = hsl_to_rgb(hue, 0.8, 0.6);
+                    auto_fire_preview_color = color; // 更新自动发射预览颜色
 
                     // 创建新球，位置为上一次发射的球的当前位置
                     let mut new_ball = Ball::new(
@@ -248,7 +253,7 @@ async fn main() {
 
                     new_ball.velocity = velocity;
 
-                    // 保存新球的ID
+                    // 保存新球的 ID
                     let new_ball_id = balls.len();
 
                     // 保存位置
@@ -257,7 +262,7 @@ async fn main() {
                     // 添加新球到向量
                     balls.push(new_ball);
 
-                    // 更新最后发射的球的ID和位置
+                    // 更新最后发射的球的 ID 和位置
                     last_launched_ball_id = Some(new_ball_id);
                     last_launched_ball_position = position;
                 }
@@ -295,6 +300,27 @@ async fn main() {
         if is_mouse_button_pressed(MouseButton::Left) {
             is_dragging = true;
             drag_start_pos = Vec2::new(mouse_position().0, mouse_position().1);
+
+            // 计算拖动预览线的颜色
+            let hue: f32;
+            if !first_ball_created {
+                hue = get_time() as f32 * 0.1 % 1.0;
+            } else {
+                // 找出碰撞次数最少的颜色
+                let min_count = *color_collision_counts.iter().min().unwrap_or(&0);
+
+                let mut min_indices = Vec::new();
+                for (i, &count) in color_collision_counts.iter().enumerate() {
+                    if count == min_count {
+                        min_indices.push(i);
+                    }
+                }
+
+                let random_index = min_indices[rand::gen_range(0, min_indices.len())];
+                hue = random_index as f32 / 10.0;
+            }
+
+            drag_preview_color = hsl_to_rgb(hue, 0.8, 0.6);
         }
 
         if is_dragging && is_mouse_button_released(MouseButton::Left) {
@@ -328,7 +354,7 @@ async fn main() {
 
             new_ball.velocity = (drag_end_pos - drag_start_pos) * 5.0;
 
-            // 保存新球的ID
+            // 保存新球的 ID
             let new_ball_id = balls.len();
 
             // 保存位置
@@ -337,12 +363,12 @@ async fn main() {
             // 添加新球到向量
             balls.push(new_ball);
 
-            // 更新最后发射的球的ID和位置
+            // 更新最后发射的球的 ID 和位置
             last_launched_ball_id = Some(new_ball_id);
             last_launched_ball_position = position;
         }
 
-        // 显示拖动预览线
+        // 显示拖动预览线（使用计算好的颜色）
         if is_dragging {
             let current_pos = Vec2::new(mouse_position().0, mouse_position().1);
             draw_line(
@@ -351,7 +377,7 @@ async fn main() {
                 current_pos.x,
                 current_pos.y,
                 2.0,
-                YELLOW,
+                drag_preview_color,
             );
         }
 
@@ -367,7 +393,7 @@ async fn main() {
         if auto_fire_enabled {
             let countdown = AUTO_FIRE_INTERVAL - auto_fire_timer;
             draw_text(
-                &format!("Next Launch: {:.1}s", countdown),
+                &format!("Next Launch: {:.1} s", countdown),
                 10.0,
                 screen_height() - 60.0,
                 24.0,
@@ -393,19 +419,19 @@ async fn main() {
             }
 
             if has_active_balls {
-                draw_circle(
-                    last_launched_ball_position.x,
-                    last_launched_ball_position.y,
-                    BALL_RADIUS,
-                    BLUE,
-                );
+                // draw_circle(
+                //     last_launched_ball_position.x,
+                //     last_launched_ball_position.y,
+                //     BALL_RADIUS,
+                //     auto_fire_preview_color,
+                // );
                 draw_line(
                     last_launched_ball_position.x,
                     last_launched_ball_position.y,
                     farthest_ball_position.x,
                     farthest_ball_position.y,
                     2.0,
-                    BLUE,
+                    auto_fire_preview_color,
                 );
             }
         }
@@ -448,7 +474,7 @@ async fn main() {
     }
 }
 
-// HSL到RGB的转换函数
+// HSL 到 RGB 的转换函数
 fn hsl_to_rgb(h: f32, s: f32, l: f32) -> Color {
     let c = (1.0 - (2.0 * l - 1.0).abs()) * s;
     let x = c * (1.0 - ((h * 6.0) % 2.0 - 1.0).abs());
