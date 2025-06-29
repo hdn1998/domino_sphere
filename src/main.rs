@@ -110,10 +110,6 @@ impl Ball {
                 other.radius = (other_area_before + area_transfer).sqrt();
             }
 
-            // 确保撞击球增加的面积等与被撞击球减少的面积
-            // self.radius = (self_area_before + area_transfer).sqrt();
-            // other.radius = (other_area_before - area_transfer).sqrt();
-
             // 如果小球半径变得非常小，直接设为不活跃
             if other.radius < 5.0 {
                 other.active = false;
@@ -175,8 +171,8 @@ async fn main() {
     // 自动发射相关变量
     let mut auto_fire_enabled = true; // 是否启用自动发射
     let mut auto_fire_timer = 0.0; // 自动发射计时器
-    const AUTO_FIRE_INTERVAL: f32 = 2.0; // 自动发射间隔（秒）
-    const AUTO_FIRE_SPEED_MULTIPLIER: f32 = 5.0; // 自动发射速度乘数
+    let mut auto_fire_interval = 1.0; // 初始自动发射间隔（秒）
+    const MIN_AUTO_FIRE_INTERVAL: f32 = 0.005; // 最小自动发射间隔
 
     // 保存上一次发射的球的位置和ID
     let mut last_launched_ball_id: Option<usize> = None;
@@ -216,10 +212,24 @@ async fn main() {
             }
         }
 
+        // 计算总碰撞次数
+        let total_collisions: u32 = color_collision_counts.iter().sum();
+
+        // 计算总碰撞次数的位数
+        let digit_count = if total_collisions == 0 {
+            1
+        } else {
+            total_collisions.to_string().len() as u32
+        };
+
+        // 根据位数计算自动发射间隔
+        // 初始间隔为1.0秒，每增加一位数，间隔减少0.1秒，直到最小间隔0.05秒
+        auto_fire_interval = (1.0 - (digit_count as f32 - 0.01) * 0.15).max(MIN_AUTO_FIRE_INTERVAL);
+
         // 更新自动发射计时器
-        if auto_fire_enabled {
+        if auto_fire_enabled && auto_fire_interval > MIN_AUTO_FIRE_INTERVAL {
             auto_fire_timer += dt;
-            if auto_fire_timer >= AUTO_FIRE_INTERVAL {
+            if auto_fire_timer >= auto_fire_interval {
                 auto_fire_timer = 0.0;
 
                 // 找出距离最远的活跃球
@@ -268,7 +278,7 @@ async fn main() {
                     let direction = farthest_ball_position - last_launched_ball_position;
                     let distance = direction.length();
                     let velocity = if distance > 0.0 {
-                        direction.normalize() * distance * AUTO_FIRE_SPEED_MULTIPLIER
+                        direction.normalize() * distance * 5.0 // 使用固定的速度乘数
                     } else {
                         Vec2::new(0.0, -500.0) // 默认向上发射
                     };
@@ -404,18 +414,20 @@ async fn main() {
         }
 
         // 显示自动发射状态
-        let status_text = if auto_fire_enabled {
-            "Auto Fire: ON"
+        let status_text = if auto_fire_enabled && auto_fire_interval > MIN_AUTO_FIRE_INTERVAL {
+            format!("Auto Fire: ON (Interval: {:.2}s)", auto_fire_interval)
+        } else if auto_fire_enabled {
+            "Auto Fire: MAX SPEED REACHED".to_string()
         } else {
-            "Auto Fire: OFF"
+            "Auto Fire: OFF".to_string()
         };
-        draw_text(status_text, 10.0, screen_height() - 30.0, 24.0, GREEN);
+        draw_text(&status_text, 10.0, screen_height() - 30.0, 24.0, GREEN);
 
         // 显示下一次自动发射倒计时
-        if auto_fire_enabled {
-            let countdown = AUTO_FIRE_INTERVAL - auto_fire_timer;
+        if auto_fire_enabled && auto_fire_interval > MIN_AUTO_FIRE_INTERVAL {
+            let countdown = auto_fire_interval - auto_fire_timer;
             draw_text(
-                &format!("Next Launch: {:.1}s", countdown),
+                &format!("Next Launch: {:.2}s", countdown),
                 10.0,
                 screen_height() - 60.0,
                 24.0,
@@ -424,7 +436,7 @@ async fn main() {
         }
 
         // 显示发射轨迹预览（如果有活跃球）
-        if auto_fire_enabled {
+        if auto_fire_enabled && auto_fire_interval > MIN_AUTO_FIRE_INTERVAL {
             let mut farthest_distance = 0.0;
             let mut farthest_ball_position = Vec2::new(0.0, 0.0);
             let mut has_active_balls = false;
@@ -482,6 +494,15 @@ async fn main() {
                 color,
             );
         }
+
+        // 显示总碰撞次数
+        draw_text(
+            &format!("Total Collisions: {}", total_collisions),
+            10.0,
+            screen_height() - 90.0,
+            24.0,
+            WHITE,
+        );
 
         // 移除不活跃的球
         balls.retain(|ball| ball.active);
