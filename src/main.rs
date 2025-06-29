@@ -6,6 +6,7 @@ struct Ball {
     radius: f32,
     color: Color,
     hue: f32,
+    active: bool, // 新增：标记球是否活跃（未消失）
 }
 
 impl Ball {
@@ -16,10 +17,15 @@ impl Ball {
             radius,
             color,
             hue,
+            active: true,
         }
     }
 
     fn update(&mut self, dt: f32) {
+        if !self.active {
+            return;
+        }
+
         self.position += self.velocity * dt;
 
         // 边界检测
@@ -44,27 +50,57 @@ impl Ball {
     }
 
     fn draw(&self) {
-        draw_circle(
-            self.position.x,
-            self.position.y,
-            self.radius,
-            self.color
-        );
+        if self.active {
+            draw_circle(
+                self.position.x,
+                self.position.y,
+                self.radius,
+                self.color
+            );
+        }
     }
 
-    fn check_collision(&mut self, other: &mut Ball, color_collision_counts: &mut [u32; 10]) {
+    fn check_collision(&mut self, other: &mut Ball, color_collision_counts: &mut [u32; 10], color_counts: &[u32; 10]) {
+        if !self.active || !other.active {
+            return;
+        }
+
         let dx = other.position.x - self.position.x;
         let dy = other.position.y - self.position.y;
         let distance = (dx * dx + dy * dy).sqrt();
 
         if distance < self.radius + other.radius {
-            // 计算两个球的颜色索引（将0-1的hue值映射到0-9的索引）
+            // 计算两个球的颜色索引
             let self_color_index = (self.hue * 10.0) as usize;
             let other_color_index = (other.hue * 10.0) as usize;
 
             // 增加对应颜色的碰撞次数
             color_collision_counts[self_color_index] += 1;
             color_collision_counts[other_color_index] += 1;
+
+            // 计算相同颜色的球的数量
+            let self_color_index = (self.hue * 10.0) as usize;
+            let other_color_index = (other.hue * 10.0) as usize;
+            let self_color_count = color_counts[self_color_index] as f32;
+            let other_color_count = color_counts[other_color_index] as f32;
+
+            // 计算大小变化倍率
+            let scale_factor = 0.05 * (self_color_count.min(other_color_count));
+
+            // 调整球体大小
+            self.radius += scale_factor;
+            other.radius -= scale_factor;
+
+            // 检查大小差距是否超过10倍
+            let size_ratio = self.radius / other.radius;
+            if size_ratio >= 10.0 || size_ratio <= 0.1 {
+                // 小球直接消失
+                if self.radius < other.radius {
+                    self.active = false;
+                } else {
+                    other.active = false;
+                }
+            }
 
             // 计算碰撞后的速度变化
             let nx = dx / distance;
@@ -143,10 +179,19 @@ async fn main() {
         }
 
         // 检测球之间的碰撞
+        // 先计算每种颜色的球的数量
+        let mut color_counts = [0u32; 10];
+        for ball in &balls {
+            if ball.active {
+                let color_index = (ball.hue * 10.0) as usize;
+                color_counts[color_index] += 1;
+            }
+        }
+        
         for i in 0..balls.len() {
             for j in (i+1)..balls.len() {
                 let (left, right) = balls.split_at_mut(j);
-                left[i].check_collision(&mut right[0], &mut color_collision_counts);
+                left[i].check_collision(&mut right[0], &mut color_collision_counts, &color_counts);
             }
         }
 
@@ -234,6 +279,9 @@ async fn main() {
                 color
             );
         }
+
+        // 移除不活跃的球
+        balls.retain(|ball| ball.active);
 
         next_frame().await
     }
