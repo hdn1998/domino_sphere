@@ -79,27 +79,26 @@ impl Ball {
             color_collision_counts[other_color_index] += 1;
 
             // 计算相同颜色的球的数量
-            let self_color_index = (self.hue * 10.0) as usize;
-            let other_color_index = (other.hue * 10.0) as usize;
             let self_color_count = color_counts[self_color_index] as f32;
             let other_color_count = color_counts[other_color_index] as f32;
 
-            // 计算大小变化倍率
-            let scale_factor = 0.05 * (self_color_count.min(other_color_count));
+            // 计算大小变化倍率（基于颜色数量的影响）
+            let scale_factor = 0.5 * (self_color_count.min(other_color_count));
 
-            // 调整球体大小
-            self.radius += scale_factor;
-            other.radius -= scale_factor;
+            // 计算原始面积
+            let self_area_before = self.radius * self.radius;
+            let other_area_before = other.radius * other.radius;
 
-            // 检查大小差距是否超过10倍
-            let size_ratio = self.radius / other.radius;
-            if size_ratio >= 10.0 || size_ratio <= 0.1 {
-                // 小球直接消失
-                if self.radius < other.radius {
-                    self.active = false;
-                } else {
-                    other.active = false;
-                }
+            // 调整球体大小（使用面积守恒）
+            let area_transfer = scale_factor * scale_factor; // 使用面积单位而非半径单位
+
+            // 确保大球增加的面积等于小球减少的面积
+            self.radius = (self_area_before + area_transfer).sqrt();
+            other.radius = (other_area_before - area_transfer).sqrt();
+
+            // 如果小球半径变得非常小，直接设为不活跃
+            if other.radius < 5.0 {
+                other.active = false;
             }
 
             // 计算碰撞后的速度变化
@@ -187,7 +186,7 @@ async fn main() {
                 color_counts[color_index] += 1;
             }
         }
-        
+
         for i in 0..balls.len() {
             for j in (i+1)..balls.len() {
                 let (left, right) = balls.split_at_mut(j);
@@ -308,4 +307,4 @@ fn hsl_to_rgb(h: f32, s: f32, l: f32) -> Color {
     };
 
     Color::new(r + m, g + m, b + m, 1.0)
-}
+}    
