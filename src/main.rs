@@ -1,4 +1,5 @@
 use macroquad::prelude::*;
+
 struct Ball {
     position: Vec2,
     velocity: Vec2,
@@ -77,12 +78,21 @@ impl Ball {
             color_collision_counts[self_color_index] += 1;
             color_collision_counts[other_color_index] += 1;
 
+            // 新增：如果两球半径差为10倍，小球直接标记为不活跃
+            if self.radius >= other.radius * 10.0 {
+                other.active = false;
+                return;
+            } else if other.radius >= self.radius * 10.0 {
+                self.active = false;
+                return;
+            }
+
             // 计算相同颜色的球的数量
             let self_color_count = color_counts[self_color_index] as f32;
             let other_color_count = color_counts[other_color_index] as f32;
 
             // 计算大小变化倍率（基于颜色数量的影响）
-            let scale_factor = 0.05 * (self_color_count.min(other_color_count));
+            let scale_factor = 0.5 * (self_color_count.min(other_color_count));
 
             // 计算原始面积
             let self_area_before = self.radius * self.radius;
@@ -92,12 +102,24 @@ impl Ball {
             let area_transfer = scale_factor * scale_factor; // 使用面积单位而非半径单位
 
             // 确保大球增加的面积等于小球减少的面积
-            self.radius = (self_area_before + area_transfer).sqrt();
-            other.radius = (other_area_before - area_transfer).sqrt();
+            if self.radius > other.radius {
+                self.radius = (self_area_before + area_transfer).sqrt();
+                other.radius = (other_area_before - area_transfer).sqrt();
+            } else {
+                self.radius = (self_area_before - area_transfer).sqrt();
+                other.radius = (other_area_before + area_transfer).sqrt();
+            }
+
+            // 确保撞击球增加的面积等与被撞击球减少的面积
+            // self.radius = (self_area_before + area_transfer).sqrt();
+            // other.radius = (other_area_before - area_transfer).sqrt();
 
             // 如果小球半径变得非常小，直接设为不活跃
             if other.radius < 5.0 {
                 other.active = false;
+            }
+            if self.radius < 5.0 {
+                self.active = false;
             }
 
             // 计算碰撞后的速度变化
@@ -156,7 +178,7 @@ async fn main() {
     const AUTO_FIRE_INTERVAL: f32 = 2.0; // 自动发射间隔（秒）
     const AUTO_FIRE_SPEED_MULTIPLIER: f32 = 5.0; // 自动发射速度乘数
 
-    // 保存上一次发射的球的位置和 ID
+    // 保存上一次发射的球的位置和ID
     let mut last_launched_ball_id: Option<usize> = None;
     let mut last_launched_ball_position = Vec2::new(screen_width() / 2.0, screen_height() - 100.0);
 
@@ -253,7 +275,7 @@ async fn main() {
 
                     new_ball.velocity = velocity;
 
-                    // 保存新球的 ID
+                    // 保存新球的ID
                     let new_ball_id = balls.len();
 
                     // 保存位置
@@ -262,7 +284,7 @@ async fn main() {
                     // 添加新球到向量
                     balls.push(new_ball);
 
-                    // 更新最后发射的球的 ID 和位置
+                    // 更新最后发射的球的ID和位置
                     last_launched_ball_id = Some(new_ball_id);
                     last_launched_ball_position = position;
                 }
@@ -354,7 +376,7 @@ async fn main() {
 
             new_ball.velocity = (drag_end_pos - drag_start_pos) * 5.0;
 
-            // 保存新球的 ID
+            // 保存新球的ID
             let new_ball_id = balls.len();
 
             // 保存位置
@@ -363,7 +385,7 @@ async fn main() {
             // 添加新球到向量
             balls.push(new_ball);
 
-            // 更新最后发射的球的 ID 和位置
+            // 更新最后发射的球的ID和位置
             last_launched_ball_id = Some(new_ball_id);
             last_launched_ball_position = position;
         }
@@ -393,7 +415,7 @@ async fn main() {
         if auto_fire_enabled {
             let countdown = AUTO_FIRE_INTERVAL - auto_fire_timer;
             draw_text(
-                &format!("Next Launch: {:.1} s", countdown),
+                &format!("Next Launch: {:.1}s", countdown),
                 10.0,
                 screen_height() - 60.0,
                 24.0,
@@ -419,12 +441,12 @@ async fn main() {
             }
 
             if has_active_balls {
-                // draw_circle(
-                //     last_launched_ball_position.x,
-                //     last_launched_ball_position.y,
-                //     BALL_RADIUS,
-                //     auto_fire_preview_color,
-                // );
+                draw_circle(
+                    last_launched_ball_position.x,
+                    last_launched_ball_position.y,
+                    BALL_RADIUS,
+                    auto_fire_preview_color,
+                );
                 draw_line(
                     last_launched_ball_position.x,
                     last_launched_ball_position.y,
@@ -474,7 +496,7 @@ async fn main() {
     }
 }
 
-// HSL 到 RGB 的转换函数
+// HSL到RGB的转换函数
 fn hsl_to_rgb(h: f32, s: f32, l: f32) -> Color {
     let c = (1.0 - (2.0 * l - 1.0).abs()) * s;
     let x = c * (1.0 - ((h * 6.0) % 2.0 - 1.0).abs());
