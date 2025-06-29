@@ -5,7 +5,6 @@ struct Ball {
     velocity: Vec2,
     radius: f32,
     color: Color,
-    // 新增：记录球的颜色类别（HSV模型中的色调值，范围0.0-1.0）
     hue: f32,
 }
 
@@ -106,17 +105,12 @@ impl Ball {
 #[macroquad::main("Ball Domino Effect")]
 async fn main() {
     let mut balls = Vec::new();
-    // 改为使用数组存储10种不同颜色的碰撞次数
     let mut color_collision_counts = [0u32; 10];
 
-    // 新增：跟踪鼠标拖动状态
     let mut is_dragging = false;
     let mut drag_start_pos = Vec2::new(0.0, 0.0);
-
-    // 记录是否是第一次生成小球
     let mut first_ball_created = false;
 
-    // 创建多米诺骨牌式排列的球
     const BALL_RADIUS: f32 = 20.0;
     const ROWS: i32 = 5;
     const COLS: i32 = 10;
@@ -130,7 +124,6 @@ async fn main() {
             let hue = (row * COLS + col) as f32 / (ROWS * COLS) as f32;
             let color = hsl_to_rgb(hue, 0.8, 0.6);
 
-            // 保存每个球的hue值，用于后续颜色分类
             balls.push(Ball::new(x, y, BALL_RADIUS, color, hue));
         }
     }
@@ -175,14 +168,12 @@ async fn main() {
             let hue: f32;
 
             if !first_ball_created {
-                // 第一次生成小球，使用随机颜色
                 hue = get_time() as f32 * 0.1 % 1.0;
                 first_ball_created = true;
             } else {
                 // 找出碰撞次数最少的颜色
                 let min_count = *color_collision_counts.iter().min().unwrap_or(&0);
 
-                // 收集所有碰撞次数最小的颜色索引
                 let mut min_indices = Vec::new();
                 for (i, &count) in color_collision_counts.iter().enumerate() {
                     if count == min_count {
@@ -190,14 +181,12 @@ async fn main() {
                     }
                 }
 
-                // 从最小碰撞次数的颜色中随机选择一个
                 let random_index = min_indices[rand::gen_range(0, min_indices.len())];
                 hue = random_index as f32 / 10.0;
             }
 
             let color = hsl_to_rgb(hue, 0.8, 0.6);
 
-            // 创建新球并根据拖动距离设置速度
             let mut new_ball = Ball::new(
                 drag_start_pos.x,
                 drag_start_pos.y,
@@ -206,7 +195,6 @@ async fn main() {
                 hue
             );
 
-            // 计算速度向量（拖动方向和距离）
             new_ball.velocity = (drag_end_pos - drag_start_pos) * 5.0;
 
             balls.push(new_ball);
@@ -222,16 +210,26 @@ async fn main() {
             );
         }
 
-        // 在屏幕上绘制各类颜色的碰撞次数
-        draw_text("Collision Counts by Color:", 10.0, 30.0, 24.0, WHITE);
+        // 生成排序后的颜色碰撞次数列表
+        let mut sorted_colors: Vec<(usize, u32)> = color_collision_counts
+            .iter()
+            .enumerate()
+            .map(|(i, &count)| (i, count))
+            .collect();
 
-        // 将HSL颜色空间分为10个区间，每个区间显示对应的碰撞次数
-        for i in 0..10 {
-            let color = hsl_to_rgb(i as f32 / 10.0, 0.8, 0.6);
+        // 按碰撞次数降序排序
+        sorted_colors.sort_by_key(|&(_, count)| std::cmp::Reverse(count));
+
+        // 在屏幕上绘制排行榜标题
+        draw_text("Collision Leaderboard:", 10.0, 30.0, 24.0, WHITE);
+
+        // 绘制排序后的颜色碰撞次数
+        for (rank, &(color_index, count)) in sorted_colors.iter().enumerate() {
+            let color = hsl_to_rgb(color_index as f32 / 10.0, 0.8, 0.6);
             draw_text(
-                &format!("{:.1}: {}", i as f32 / 10.0, color_collision_counts[i]),
-                10.0 + (i % 5) as f32 * 150.0,
-                60.0 + (i / 5) as f32 * 30.0,
+                &format!("{}. {:.1}: {}", rank + 1, color_index as f32 / 10.0, count),
+                10.0,
+                60.0 + rank as f32 * 30.0,
                 20.0,
                 color
             );
@@ -262,4 +260,4 @@ fn hsl_to_rgb(h: f32, s: f32, l: f32) -> Color {
     };
 
     Color::new(r + m, g + m, b + m, 1.0)
-}    
+}
